@@ -24,6 +24,22 @@ function assertNameLen(name: string) {
   }
 }
 
+/**
+ * A lightweight text-only container that can be bundled into a REBUILD
+ * alongside a primary ListObject or TextObject. Used for persistent
+ * overlays like status bars.
+ */
+export interface OverlayTextObject {
+  name: string;          // ≤14 chars, unique within the plugin task
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  containerId?: number;  // default 2+ (1 is the primary)
+  captureEvents?: boolean;
+}
+
 // ---------- Cmd=0 CreateStartUpPageContainer ----------
 
 export interface StartUpPageOptions {
@@ -40,17 +56,35 @@ export interface StartUpPageOptions {
   magic?: number;            // MagicRandom ack-matching key, default 201
 }
 
-export function buildCreateStartUpPageContainer(opts: StartUpPageOptions): {
+export function buildCreateStartUpPageContainer(opts: StartUpPageOptions & {
+  /** Additional container names to register in the same CREATE. Each gets a
+   *  placeholder ListObject with default geometry. Required so that subsequent
+   *  REBUILDs can address them by name. */
+  extraContainerNames?: string[];
+}): {
   pb: Uint8Array;
   magic: number;
 } {
   assertNameLen(opts.name);
+  const extra = (opts.extraContainerNames ?? []).map((n, i) => {
+    assertNameLen(n);
+    return {
+      XPosition: 0,
+      YPosition: 0,
+      Width: 280,
+      Height: 130,
+      ContainerID: 2 + i,
+      ContainerName: n,
+      IsEventCapture: 0,
+      ItemContainer: { ItemCount: 1, IsItemSelectBorderEn: 0, ItemName: ["."] },
+    };
+  });
   const magic = opts.magic ?? 201;
   const msg = create(evenhub_main_msg_ctxSchema, {
     Cmd: EvenHub_Cmd_List.APP_REQUEST_CREATE_STARTUP_PAGE_PACKET,
     MagicRandom: magic,
     CreateMessage: {
-      ContainerTotalNum: 1,
+      ContainerTotalNum: 1 + extra.length,
       widgetId: opts.widgetId ?? 10000,
       ListObject: [{
         XPosition: opts.x ?? 0,
@@ -65,7 +99,44 @@ export function buildCreateStartUpPageContainer(opts: StartUpPageOptions): {
           IsItemSelectBorderEn: (opts.selectionBorder ?? true) ? 1 : 0,
           ItemName: opts.items,
         },
-      }],
+      }, ...extra],
+    },
+  });
+  return { pb: toBinary(evenhub_main_msg_ctxSchema, msg), magic };
+}
+
+// ---------- Cmd=5 TextContainerUpgrade (in-place text update) ----------
+
+export interface TextUpgradeOptions {
+  containerId: number;
+  containerName: string;
+  content: string;
+  contentOffset?: number;   // byte offset into the existing content, default 0
+  contentLength?: number;   // length of the new content, default = content.length
+  magic?: number;
+}
+
+/**
+ * Cmd=5 — update the text content of an existing TextContainer without
+ * rebuilding its geometry. Flicker-free on hardware, faster than a full
+ * REBUILD, and uses less BLE bandwidth. The container must already exist
+ * (created via CREATE or REBUILD with a TextObject).
+ */
+export function buildTextUpgrade(opts: TextUpgradeOptions): {
+  pb: Uint8Array;
+  magic: number;
+} {
+  assertNameLen(opts.containerName);
+  const magic = opts.magic ?? 206;
+  const msg = create(evenhub_main_msg_ctxSchema, {
+    Cmd: EvenHub_Cmd_List.APP_UPDATE_TEXT_DATA_PACKET,
+    MagicRandom: magic,
+    TextUpgrade: {
+      ContainerID: opts.containerId,
+      ContainerName: opts.containerName,
+      ContentOffset: opts.contentOffset ?? 0,
+      ContentLength: opts.contentLength ?? opts.content.length,
+      Content: opts.content,
     },
   });
   return { pb: toBinary(evenhub_main_msg_ctxSchema, msg), magic };
@@ -85,17 +156,22 @@ export interface TextContainerOptions {
   magic?: number;
 }
 
-export function buildUpdateTextContainer(opts: TextContainerOptions): {
+export function buildUpdateTextContainer(opts: TextContainerOptions & {
+  /** Overlay text objects to include in the same REBUILD. */
+  overlays?: OverlayTextObject[];
+}): {
   pb: Uint8Array;
   magic: number;
 } {
   assertNameLen(opts.name);
+  const overlays = opts.overlays ?? [];
+  for (const o of overlays) assertNameLen(o.name);
   const magic = opts.magic ?? 202;
   const msg = create(evenhub_main_msg_ctxSchema, {
     Cmd: EvenHub_Cmd_List.APP_REQUEST_REBUILD_PAGE_PACKET,
     MagicRandom: magic,
     RebuildContainer: {
-      ContainerTotalNum: 1,
+      ContainerTotalNum: 1 + overlays.length,
       TextObject: [{
         XPosition: opts.x ?? 0,
         YPosition: opts.y ?? 0,
@@ -105,7 +181,16 @@ export function buildUpdateTextContainer(opts: TextContainerOptions): {
         ContainerName: opts.name,
         IsEventCapture: opts.captureEvents ? 1 : 0,
         Content: opts.text,
-      }],
+      }, ...overlays.map((o) => ({
+        XPosition: o.x,
+        YPosition: o.y,
+        Width: o.width,
+        Height: o.height,
+        ContainerID: o.containerId ?? 2,
+        ContainerName: o.name,
+        IsEventCapture: o.captureEvents ? 1 : 0,
+        Content: o.text,
+      }))],
     },
   });
   return { pb: toBinary(evenhub_main_msg_ctxSchema, msg), magic };
@@ -126,17 +211,22 @@ export interface UpdateListOptions {
   magic?: number;
 }
 
-export function buildUpdateListContainer(opts: UpdateListOptions): {
+export function buildUpdateListContainer(opts: UpdateListOptions & {
+  /** Overlay text objects to include in the same REBUILD. */
+  overlays?: OverlayTextObject[];
+}): {
   pb: Uint8Array;
   magic: number;
 } {
   assertNameLen(opts.name);
+  const overlays = opts.overlays ?? [];
+  for (const o of overlays) assertNameLen(o.name);
   const magic = opts.magic ?? 203;
   const msg = create(evenhub_main_msg_ctxSchema, {
     Cmd: EvenHub_Cmd_List.APP_REQUEST_REBUILD_PAGE_PACKET,
     MagicRandom: magic,
     RebuildContainer: {
-      ContainerTotalNum: 1,
+      ContainerTotalNum: 1 + overlays.length,
       ListObject: [{
         XPosition: opts.x ?? 0,
         YPosition: opts.y ?? 0,
@@ -151,6 +241,16 @@ export function buildUpdateListContainer(opts: UpdateListOptions): {
           ItemName: opts.items,
         },
       }],
+      TextObject: overlays.map((o) => ({
+        XPosition: o.x,
+        YPosition: o.y,
+        Width: o.width,
+        Height: o.height,
+        ContainerID: o.containerId ?? 2,
+        ContainerName: o.name,
+        IsEventCapture: o.captureEvents ? 1 : 0,
+        Content: o.text,
+      })),
     },
   });
   return { pb: toBinary(evenhub_main_msg_ctxSchema, msg), magic };
