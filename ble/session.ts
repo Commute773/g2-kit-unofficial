@@ -23,6 +23,31 @@ export interface G2SessionOptions {
   quiet?: boolean;             // suppress info logs
 }
 
+/**
+ * Minimal transport contract that UI helpers (AudioCapture, G2ImageStreamer)
+ * depend on. Lets consumers plug in alternate transports (e.g. a phone-hosted
+ * BLE relay like droidbridge) without linking against noble. G2Session itself
+ * implements this by virtue of exposing the same public surface.
+ */
+export interface G2SessionLike {
+  sendPb(
+    sid: number,
+    pb: Uint8Array,
+    magic: number,
+    opts?: { flag?: number; ackTimeoutMs?: number; arm?: "L" | "R" },
+  ): Promise<ParsedFrame | null>;
+  sendPbPipelined(
+    sid: number,
+    pb: Uint8Array,
+    magic: number,
+    opts?: { flag?: number; ackTimeoutMs?: number; arm?: "L" | "R" },
+  ): Promise<{ ack: Promise<ParsedFrame | null> }>;
+  onEvent(fn: (ev: DecodedEvent, frame: ParsedFrame) => void): () => void;
+  onRawFrame(fn: (frame: ParsedFrame, raw: Uint8Array, arm: "L" | "R") => void): () => void;
+  onRender(fn: (data: Uint8Array, arm: "L" | "R") => void): () => void;
+  close(): Promise<void>;
+}
+
 export class G2Session {
   readonly left: ArmHandles;
   readonly right: ArmHandles;

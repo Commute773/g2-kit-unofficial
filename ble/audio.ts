@@ -25,7 +25,7 @@ import {
   evenhub_main_msg_ctxSchema,
   EvenHub_Cmd_List,
 } from "./gen/EvenHub_pb";
-import type { G2Session } from "./session";
+import type { G2SessionLike } from "./session";
 
 const SID_EVENHUB = 0xe0;
 
@@ -85,12 +85,12 @@ export interface AudioCaptureOptions {
  * in ./messages.ts).
  */
 export class AudioCapture {
-  private session: G2Session;
+  private session: G2SessionLike;
   private listeners = new Set<(pkt: AudioPacket) => void>();
   private offRender: (() => void) | null = null;
   private running = false;
 
-  constructor(session: G2Session) {
+  constructor(session: G2SessionLike) {
     this.session = session;
   }
 

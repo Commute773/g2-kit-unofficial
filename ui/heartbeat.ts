@@ -7,11 +7,11 @@
 // exist yet), so `shouldBeat` lets the caller gate on "has the first
 // container been created?"
 
-import type { G2Session } from "../ble";
+import type { G2SessionLike } from "../ble";
 import { buildHeartbeat, ts } from "../ble";
 
 export type HeartbeatOpts = {
-  session: G2Session;
+  session: G2SessionLike;
   nextMagic: () => number;
   /** Gate — return false to skip this beat. Defaults to always-beat. */
   shouldBeat?: () => boolean;

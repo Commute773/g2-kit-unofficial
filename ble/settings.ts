@@ -12,7 +12,7 @@
 // we decode into a `DeviceSettingsSnapshot`.
 
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import type { G2Session } from "./session";
+import type { G2SessionLike } from "./session";
 import {
   APPRequestSettingType,
   G2SettingPackageSchema,
@@ -87,7 +87,7 @@ export function decodeSettingsSnapshot(pb: Uint8Array): DeviceSettingsSnapshot |
 
 // One read. Returns `null` on ack timeout.
 export async function querySettings(
-  session: G2Session,
+  session: G2SessionLike,
   magic: number,
 ): Promise<DeviceSettingsSnapshot | null> {
   const req = create(G2SettingPackageSchema, {
@@ -111,7 +111,7 @@ type G2SettingInit = Parameters<typeof create<typeof G2SettingPackageSchema>>[1]
 type DeviceReceiveInit = NonNullable<G2SettingInit>["deviceReceiveInfoFromApp"];
 
 export async function sendDeviceReceive(
-  session: G2Session,
+  session: G2SessionLike,
   magic: number,
   init: DeviceReceiveInit,
 ): Promise<boolean> {
@@ -129,7 +129,7 @@ export async function sendDeviceReceive(
 // update its cached snapshot when the device didn't confirm.
 
 export function setBrightness(
-  session: G2Session,
+  session: G2SessionLike,
   magic: number,
   v: { autoAdjust?: number; brightnessLevel?: number; leftCalibration?: number; rightCalibration?: number },
 ) {
@@ -137,35 +137,35 @@ export function setBrightness(
 }
 
 export function setHeadUp(
-  session: G2Session,
+  session: G2SessionLike,
   magic: number,
   v: { headUpSwitch?: number; headUpAngle?: number; headUpCalibrationSwitch?: number; headUpCalibration?: number },
 ) {
   return sendDeviceReceive(session, magic, { deviceReceiveHeadUpSetting: v });
 }
 
-export function setWearDetection(session: G2Session, magic: number, wearDetectionSwitch: number) {
+export function setWearDetection(session: G2SessionLike, magic: number, wearDetectionSwitch: number) {
   return sendDeviceReceive(session, magic, { deviceReceiveWearDetection: { wearDetectionSwitch } });
 }
 
-export function setSilentMode(session: G2Session, magic: number, silentModeSwitch: number) {
+export function setSilentMode(session: G2SessionLike, magic: number, silentModeSwitch: number) {
   return sendDeviceReceive(session, magic, { deviceReceiveSilentMode: { silentModeSwitch } });
 }
 
-export function setDominantHand(session: G2Session, magic: number, dominantHand: number) {
+export function setDominantHand(session: G2SessionLike, magic: number, dominantHand: number) {
   return sendDeviceReceive(session, magic, { appSendDominantHand: { dominantHand } });
 }
 
-export function setXCoordinate(session: G2Session, magic: number, xCoordinateLevel: number) {
+export function setXCoordinate(session: G2SessionLike, magic: number, xCoordinateLevel: number) {
   return sendDeviceReceive(session, magic, { deviceReceiveXCoordinate: { xCoordinateLevel } });
 }
 
-export function setYCoordinate(session: G2Session, magic: number, yCoordinateLevel: number) {
+export function setYCoordinate(session: G2SessionLike, magic: number, yCoordinateLevel: number) {
   return sendDeviceReceive(session, magic, { deviceReceiveYCoordinate: { yCoordinateLevel } });
 }
 
 export function setUniverseSetting(
-  session: G2Session,
+  session: G2SessionLike,
   magic: number,
   v: { unitFormat?: number; distanceUnit?: number; timeFormat?: number; dateFormat?: number; temperatureUnit?: number },
 ) {

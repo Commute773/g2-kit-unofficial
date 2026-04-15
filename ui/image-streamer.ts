@@ -24,7 +24,7 @@
 // task (SYSTEM_EXIT / ABNORMAL_EXIT / FOREGROUND_EXIT).
 
 import type {
-  G2Session,
+  G2SessionLike,
   ParsedFrame,
 } from "../ble";
 import {
@@ -49,7 +49,7 @@ export type ImageTileData = {
 };
 
 export type ImageStreamerOpts = {
-  session: G2Session;
+  session: G2SessionLike;
   nextMagic: () => number;
   /** How many Cmd=3 acks we allow in flight at once. Default 4. */
   windowSize?: number;
@@ -70,7 +70,7 @@ export type ImageStreamResult =
   | "warmup-failed";
 
 export class G2ImageStreamer {
-  private readonly session: G2Session;
+  private readonly session: G2SessionLike;
   private readonly nextMagic: () => number;
   private readonly windowSize: number;
   private readonly onRebuildSuccess: () => void;

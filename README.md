@@ -83,6 +83,12 @@ g2-kit/
 
 The glasses-facing side of the [cmux](https://github.com/Commute773/cmux) tmux frontend consumes both libraries and is the reference real-world consumer — it lives at `cmux/glasses/bridge.ts`, not in this repo.
 
+## Optional: Android BLE transport via DroidBridge
+
+Desktop BLE stacks (Noble on macOS/Linux, WinRT, BlueZ) are fragile — pairings get lost on sleep, scans stall, MTU negotiation drifts. If you already have an Android phone lying around, you can use [DroidBridge](https://github.com/Commute773/droidbridge) as a more resilient transport: install the APK, tap **Start Server**, and the phone exposes its BLE stack as a local HTTP + WebSocket service that any `G2SessionLike` implementation can target.
+
+A working DroidBridge-backed session lives in [`cmux/glasses/droidbridge-session.ts`](https://github.com/Commute773/cmux/blob/main/glasses/droidbridge-session.ts) — it implements the same `G2SessionLike` interface as the stock Noble `G2Session`, so swapping transports is a one-line change in the consumer. See the DroidBridge README for the REST/WS API.
+
 ## Status
 
 Extracted out of a working cmux integration. APIs are settling but still pre-1.0 — expect minor breakage on version bumps. The wire protocol itself is stable (it's reverse-engineered from shipping firmware).
