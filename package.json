@@ -1,0 +1,23 @@
+{
+  "name": "g2-kit",
+  "version": "0.1.0",
+  "description": "Libraries for the Even Realities G2 smart glasses: direct BLE transport + UI abstractions.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Commute773/g2-kit-unofficial.git"
+  },
+  "exports": {
+    "./ble": "./ble/index.ts",
+    "./ui": "./ui/index.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.11.0",
+    "@stoprocent/noble": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^6.0.2"
+  }
+}
