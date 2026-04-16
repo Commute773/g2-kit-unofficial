@@ -12,6 +12,9 @@ import {
   buildRingPacket,
   buildPairAuthInit,
   buildTimeSync,
+  buildConfig1Get,
+  buildConfig2Get,
+  buildHrvInit,
   parseRingPacket,
   tryDecodeHealthPush,
   decodeHeartRateTail,
@@ -174,6 +177,55 @@ describe("buildTimeSync", () => {
     const unix = ts[0]! | (ts[1]! << 8) | (ts[2]! << 16) | (ts[3]! << 24);
     expect(unix).toBeGreaterThanOrEqual(before);
     expect(unix).toBeLessThanOrEqual(before + 2);
+  });
+});
+
+describe("buildConfig1Get / buildConfig2Get", () => {
+  test("config1/get packet shape matches captured app (seq=40, nonce=912f)", () => {
+    // Captured: 00 d5faceaf 64 01 64 28 0000 00 0e 0c 00 912f
+    const pkt = buildConfig1Get(0x28, new Uint8Array([0x91, 0x2f]));
+    pkt.set(new Uint8Array([0xd5, 0xfa, 0xce, 0xaf]), 1);
+    expect(Buffer.from(pkt).toString("hex")).toBe(
+      "00d5faceaf640164280000000e0c00912f",
+    );
+  });
+
+  test("config2/get packet shape matches captured app (seq=41, nonce=015d)", () => {
+    // Captured: 00 00045a68 64 01 64 29 0000 00 0f 0c 00 015d
+    const pkt = buildConfig2Get(0x29, new Uint8Array([0x01, 0x5d]));
+    pkt.set(new Uint8Array([0x00, 0x04, 0x5a, 0x68]), 1);
+    expect(Buffer.from(pkt).toString("hex")).toBe(
+      "0000045a68640164290000000f0c00015d",
+    );
+  });
+
+  test("config1/get defaults nonce to random bytes", () => {
+    const a = buildConfig1Get(10);
+    const b = buildConfig1Get(10);
+    const p1 = parseRingPacket(a);
+    const p2 = parseRingPacket(b);
+    expect(p1.cmd).toBe(0x0e);
+    expect(p1.sub).toBe(0x0c);
+    expect(Buffer.from(p1.payload).equals(Buffer.from(p2.payload))).toBe(false);
+  });
+});
+
+describe("buildHrvInit", () => {
+  test("packet shape matches captured app (seq=44, nonce=1ede)", () => {
+    // Captured: 00 0e8624a9 64 01 64 2c 0000 00 04 18 00 1ede 02 00*11
+    const pkt = buildHrvInit(0x2c, new Uint8Array([0x1e, 0xde]));
+    pkt.set(new Uint8Array([0x0e, 0x86, 0x24, 0xa9]), 1);
+    expect(Buffer.from(pkt).toString("hex")).toBe(
+      "000e8624a96401642c0000000418001ede020000000000000000000000",
+    );
+  });
+
+  test("encodes 14-byte payload (2B nonce + 0x02 + 11 × 0x00)", () => {
+    const pkt = buildHrvInit(1, new Uint8Array([0xaa, 0xbb]));
+    const p = parseRingPacket(pkt);
+    expect(p.payload.length).toBe(14);
+    expect(Array.from(p.payload.slice(0, 3))).toEqual([0xaa, 0xbb, 0x02]);
+    expect(Array.from(p.payload.slice(3)).every(b => b === 0)).toBe(true);
   });
 });
 

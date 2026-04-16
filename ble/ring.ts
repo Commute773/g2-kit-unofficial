@@ -276,6 +276,72 @@ export function buildTimeSync(seq: number, unixSec?: number): Uint8Array {
   });
 }
 
+/**
+ * Build a config-group-1 query (cmd=0x0e sub=0x0c). The app sends this
+ * during pair init right after pairAuth; the ring responds with a 13-byte
+ * blob on sub=0x18 (various firmware settings).
+ *
+ * Payload is a 2-byte freshness nonce; the ring doesn't verify its
+ * contents but echoes a different 2-byte value in its response.
+ */
+export function buildConfig1Get(seq: number, nonce?: Uint8Array): Uint8Array {
+  const prefix = nonce ?? randomNonce2();
+  if (prefix.length !== 2) {
+    throw new Error(`nonce must be 2 bytes, got ${prefix.length}`);
+  }
+  return buildRingPacket({
+    seq,
+    flags: R1_FLAGS.REQUEST,
+    cmd: 0x0e,
+    sub: 0x0c,
+    payload: prefix,
+  });
+}
+
+/**
+ * Build a config-group-2 query (cmd=0x0f sub=0x0c). Same shape as
+ * buildConfig1Get but a different group; the app sends both in sequence.
+ */
+export function buildConfig2Get(seq: number, nonce?: Uint8Array): Uint8Array {
+  const prefix = nonce ?? randomNonce2();
+  if (prefix.length !== 2) {
+    throw new Error(`nonce must be 2 bytes, got ${prefix.length}`);
+  }
+  return buildRingPacket({
+    seq,
+    flags: R1_FLAGS.REQUEST,
+    cmd: 0x0f,
+    sub: 0x0c,
+    payload: prefix,
+  });
+}
+
+/**
+ * Build an HRV init packet (cmd=0x04 sub=0x18). The app sends this
+ * sandwiched between the two linkToGlasses calls during pair init — it
+ * puts the ring into HRV sampling mode, which also enables the algorithm
+ * that feeds tap/scroll events out over RF to the glasses.
+ *
+ * Payload shape: `[2-byte nonce] [0x02] [11 × 0x00]` (14 bytes).
+ */
+export function buildHrvInit(seq: number, nonce?: Uint8Array): Uint8Array {
+  const prefix = nonce ?? randomNonce2();
+  if (prefix.length !== 2) {
+    throw new Error(`nonce must be 2 bytes, got ${prefix.length}`);
+  }
+  const payload = new Uint8Array(14);
+  payload[0] = prefix[0]!;
+  payload[1] = prefix[1]!;
+  payload[2] = 0x02;
+  return buildRingPacket({
+    seq,
+    flags: R1_FLAGS.REQUEST,
+    cmd: 0x04,
+    sub: 0x18,
+    payload,
+  });
+}
+
 // ---------- Accelerometer / IMU ----------
 
 /**
