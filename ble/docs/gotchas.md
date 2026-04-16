@@ -80,6 +80,29 @@ on the startHeartbeat helper.
 running for the lifetime of your session, including while mic-streaming —
 if heartbeats stop, the mic stream silently stops too.
 
+## Write serialization
+
+**Multi-fragment messages must not interleave on the BLE characteristic.**
+The firmware has a single reassembly buffer keyed by the transport `seq`
+byte. If a heartbeat (1 fragment) lands in the middle of a 3-fragment
+REBUILD, the REBUILD's reassembly is corrupted. After enough corruptions
+the plugin task wedges — it still acks heartbeats but silently stops
+routing tap events.
+
+`sendFrames()` and `G2Session.sendPb()` serialize writes automatically
+via `withWriteLock()`. If you build your own transport (e.g. proxying BLE
+through a phone), use the same lock:
+
+```ts
+import { withWriteLock, type WriteLockHolder } from "g2-kit/ble";
+
+const arm: WriteLockHolder = { writeLock: Promise.resolve() };
+
+await withWriteLock(arm, async () => {
+  for (const f of frames) await writeOneFragment(f);
+});
+```
+
 ## Arms
 
 **Left arm is silent on async events.** Wear detection, container taps,

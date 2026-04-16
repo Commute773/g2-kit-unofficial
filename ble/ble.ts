@@ -50,6 +50,8 @@ export interface ArmHandles {
   waiters: Map<string, (f: ParsedFrame) => void>;
   listeners: Set<(f: ParsedFrame, raw: Uint8Array) => void>;
   renderListeners: Set<(data: Uint8Array) => void>;
+  /** Serializes multi-fragment writes so heartbeats can't interleave with REBUILDs. */
+  writeLock: Promise<void>;
 }
 
 export interface BothArms {
@@ -103,6 +105,7 @@ export async function connectArm(
     waiters: new Map(),
     listeners: new Set(),
     renderListeners: new Set(),
+    writeLock: Promise.resolve(),
   };
 
   notify.on("data", (data: Buffer) => {
@@ -154,8 +157,24 @@ export function waitForAck(
   });
 }
 
+export type WriteLockHolder = { writeLock: Promise<void> };
+
+export async function withWriteLock<T>(holder: WriteLockHolder, fn: () => Promise<T>): Promise<T> {
+  const prev = holder.writeLock;
+  let release!: () => void;
+  holder.writeLock = new Promise<void>((r) => { release = r; });
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 export async function sendFrames(arm: ArmHandles, frames: Uint8Array[]): Promise<void> {
-  for (const f of frames) await arm.write.writeAsync(Buffer.from(f), true);
+  await withWriteLock(arm, async () => {
+    for (const f of frames) await arm.write.writeAsync(Buffer.from(f), true);
+  });
 }
 
 export function onFrame(

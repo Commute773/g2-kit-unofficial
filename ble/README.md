@@ -29,7 +29,7 @@ If you're reverse-engineering your own integration, the docs are the source of t
 | File | Exports | Purpose |
 |---|---|---|
 | `session.ts` | `G2Session`, `G2SessionOptions` | High-level scan + connect + prelude + send/ack wrapper |
-| `ble.ts` | `findBothArms`, `connectArm`, `waitForAck`, `sendFrames`, `onFrame`, `onRender`, `ArmHandles`, char UUIDs | Low-level Noble wiring for both arms |
+| `ble.ts` | `findBothArms`, `connectArm`, `waitForAck`, `sendFrames`, `withWriteLock`, `WriteLockHolder`, `onFrame`, `onRender`, `ArmHandles`, char UUIDs | Low-level Noble wiring for both arms |
 | `envelope.ts` | `framePb`, `parseFrame`, `FLAG_REQUEST`, `ParsedFrame` | Envelope encode/decode with CRC + seq fragmentation |
 | `crc.ts` | `crc16CcittFalse` | CRC-16/CCITT-FALSE implementation (tested) |
 | `messages.ts` | `buildCreateStartUpPageContainer`, `buildUpdateListContainer`, `buildUpdateTextContainer`, `buildHeartbeat`, `buildShutDown`, prelude constants | EvenHub protobuf builders |
@@ -78,7 +78,7 @@ Values ≥256 silently never ack. This is documented in `docs/envelope.md`.
 ## What's NOT in this package
 
 - No pager, no virtual list. Use [`g2-kit/ui`](../ui) or roll your own.
-- No render coalescing / rate-limiting. The firmware can't handle concurrent Cmd=7 writes, so serialize renders yourself or use `g2-kit/ui`'s `RenderCoalescer`.
+- No render coalescing / rate-limiting. The firmware can't handle concurrent Cmd=7 writes, so serialize renders yourself or use `g2-kit/ui`'s `RenderCoalescer`. (Fragment-level write serialization IS handled — `sendFrames` guarantees one message's fragments complete before another starts.)
 - No image streaming pipeline. Raw `buildUpdateImageContainer` + `planImageFragments` are exported, but the sliding-window + first-stream warmup logic lives in `g2-kit/ui`'s `G2ImageStreamer`.
 - No reconnection logic. If the BLE link drops, call `G2Session.open()` again.
 - No settings menu state machine. That's cmux-specific and lives in `cmux/glasses/settings-menu.ts`.
