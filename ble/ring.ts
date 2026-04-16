@@ -44,20 +44,27 @@ export const R1_NAME_RE = /^EVEN\s+R1_([0-9A-F]{6})$/i;
 
 // ---------- Cmd / flag constants ----------
 
+// Observed wire-level cmd bytes. Names are best-effort from the
+// Dart-decompiled `BleRing1Cmd` enum, but the byte-to-name mapping isn't
+// strictly the enum ordinal — the firmware uses a lookup table that we
+// haven't fully reversed. Always prefer the empirically-observed byte
+// (captured in HCI snoop) over the name when they disagree.
 export const R1_CMD = {
-  system: 0x00,
+  /** pairAuth init/complete — paired with sub=0x0d. Despite the Dart
+   *  BleRing1Module.system.pairAuth grouping, the wire cmd byte for
+   *  pairAuth is 0x08 (not 0x00). */
+  pairAuth: 0x08,
   heartRate: 0x01,
-  spo2: 0x02,
+  firmware: 0x02,            // cmd=0x02 sub=0x0c is the firmware query/response (not spo2 as the enum name might suggest)
   temperature: 0x03,
   hrv: 0x04,
-  activity: 0x05,
+  activity: 0x05,            // also carries phone→ring time-sync pushes on sub=0x12
   sleep: 0x06,
   sportRunCtrl: 0x07,
-  sportRunData: 0x08,
   healthSetting: 0x09,
-  // The following cmd codes don't appear in the `BleRing1Cmd` Dart enum
-  // (which stops at 0x09) but are observed on the wire during the normal
-  // app pair sequence. Likely internal/undocumented subsystems:
+  // Extended: observed on the wire during the normal app pair sequence
+  // but don't appear in the `BleRing1Cmd` Dart enum (which stops at 0x09).
+  // Likely internal/undocumented subsystems:
   linkToGlasses: 0x0a,       // pair/bind with G2 glasses (sub=0x12)
   algoKey: 0x0b,             // get current session key (sub=0x0c req, 0x25 resp)
   config1: 0x0e,             // config readout (sub=0x0c req, 0x18 resp)
@@ -232,7 +239,7 @@ export function buildPairAuthInit(seq: number, payload: Uint8Array): Uint8Array 
   return buildRingPacket({
     seq,
     flags: R1_FLAGS.REQUEST,
-    cmd: R1_CMD.system,
+    cmd: R1_CMD.pairAuth,  // 0x08 on the wire
     sub: 0x0d,
     payload,
   });
@@ -263,10 +270,59 @@ export function buildTimeSync(seq: number, unixSec?: number): Uint8Array {
   return buildRingPacket({
     seq,
     flags: R1_FLAGS.PUSH,
-    cmd: R1_CMD.activity,  // 0x05
+    cmd: R1_CMD.activity,  // 0x05 — same cmd byte as activity samples; sub=0x12 selects the time-sync variant
     sub: 0x12,
     payload,
   });
+}
+
+// ---------- Accelerometer / IMU ----------
+
+/**
+ * The G2 glasses + R1 ring both ship 3-axis accelerometers. The firmware
+ * exposes readings through the `Sys_ItemEvent.IMUData` proto field (a
+ * `{ double x, y, z }` tuple) alongside CLICK_EVENT / DOUBLE_CLICK, and
+ * also as standalone `EventType = 8 IMU_DATA_REPORT` events.
+ *
+ * **Caveat:** we've never observed the firmware actually populate
+ * `IMUData` in the wild — in every captured sys-event the field was
+ * absent, even during rapid taps. Either the firmware has gated the
+ * stream behind a config command we haven't identified, or the feature
+ * was defined in the proto but never wired. Decoders are provided
+ * anyway so consumers are ready if/when the hardware starts reporting.
+ *
+ * Source channels to watch:
+ *   - Ring native BLE: cmd=0x01 sub=?? push (not yet seen).
+ *   - Glasses G2 proto: `Sys_ItemEvent.IMUData` inside
+ *     `evenhub_main_msg_ctx.DevEvent.SysEvent` on sid=0xe0 flag=0x01.
+ *     The `EventSource` distinguishes ring vs glasses vs dummy.
+ */
+export interface ImuReading {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Normalize the `IMU_Report_Data` proto value into a plain reading. */
+export function normalizeImu(imu: { x?: number; y?: number; z?: number } | undefined | null): ImuReading | null {
+  if (!imu) return null;
+  const x = imu.x ?? 0;
+  const y = imu.y ?? 0;
+  const z = imu.z ?? 0;
+  // Treat an all-zero reading as "absent" — the firmware default state.
+  if (x === 0 && y === 0 && z === 0) return null;
+  return { x, y, z };
+}
+
+/**
+ * Extract IMU data from a decoded `SysEvent`, returning null when the
+ * firmware didn't populate the field (observed default).
+ */
+export function extractImuFromSysEvent(
+  ev: { IMUData?: { x?: number; y?: number; z?: number } } | undefined | null,
+): ImuReading | null {
+  if (!ev) return null;
+  return normalizeImu(ev.IMUData);
 }
 
 // Re-export the G2 sys-event decoder so consumers can pull ring-originated
