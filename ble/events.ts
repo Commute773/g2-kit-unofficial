@@ -8,6 +8,7 @@ import {
   evenhub_main_msg_ctxSchema,
   EvenHub_Cmd_List,
   OsEventTypeList,
+  EventSourceType,
 } from "./gen/EvenHub_pb";
 
 export type DecodedEvent =
@@ -35,6 +36,7 @@ export interface TextClickEvent {
 export interface SysEvent {
   kind: "sys-event";
   eventType: OsEventTypeList;
+  eventSource: EventSourceType;  // 2 = TOUCH_EVENT_FROM_RING, 1/3 = glasses R/L, 0 = unknown
   systemExitReasonCode: number;
 }
 
@@ -159,6 +161,7 @@ export function decodeAsyncEvent(sid: number, flag: number, pb: Uint8Array): Dec
             return {
               kind: "sys-event",
               eventType: d.SysEvent.EventType,
+              eventSource: d.SysEvent.EventSource,
               systemExitReasonCode: d.SysEvent.systemExitReasonCode,
             };
           }

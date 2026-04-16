@@ -14,6 +14,7 @@ export * from "./settings";
 export * from "./audio";
 export * from "./lc3-decoder";
 export * from "./image";
+export * as r1 from "./ring";
 // Re-export commonly used generated enums so consumers don't need to reach
 // into lib/gen themselves.
-export { OsEventTypeList, EvenHub_Cmd_List } from "./gen/EvenHub_pb";
+export { OsEventTypeList, EventSourceType, EvenHub_Cmd_List } from "./gen/EvenHub_pb";
