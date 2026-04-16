@@ -276,3 +276,133 @@ export function buildTimeSync(seq: number, unixSec?: number): Uint8Array {
 //   → { kind:"sys-event", eventType, eventSource }
 // with eventSource === EventSourceType.TOUCH_EVENT_FROM_RING (=2).
 export { EventSourceType } from "./gen/EvenHub_pb";
+
+// ---------- Health push decoder ----------
+
+/**
+ * The ring autonomously streams health samples over its notify channel
+ * as it takes measurements. Each push follows a common header shape:
+ *
+ *   [0..1]  2-byte per-push nonce / hash (varies)
+ *   [2]     flag byte (01 / 02 / 03 / 04 — seems to gate data types)
+ *   [3..4]  fixed marker `10 ff`
+ *   [5..8]  u32 LE window-start timestamp (usually 00:00 UTC of the day)
+ *   [9..12] u32 LE sample timestamp (unix seconds)
+ *   [13..]  metric-specific tail (see per-subcmd notes)
+ *
+ * Observed sub-codes on cmd=0x01:
+ *   0x1c  small push, 5-byte tail — unidentified, frequent during streaming
+ *   0x20  activity (steps) — tail is u8 sentinel + u16 LE samples
+ *   0x24  heart rate — tail is groups of `[offset_min][bpm]×3` at varying
+ *         intervals; BPM bytes are raw integers (e.g. 0x56=86 bpm)
+ *   0x28  multi-metric roll-up — pairs of (type, value) in the tail
+ *   0x2f  long multi-metric window
+ *
+ * The tail formats vary per sub and are not fully reversed yet — consumers
+ * should treat `tail` as opaque bytes and specialize per sub as needed.
+ */
+export interface RingHealthPush {
+  kind: "ring-health";
+  cmd: number;
+  sub: number;
+  subName: "heartRate" | "activity" | "multi" | "other";
+  flagByte: number;
+  windowStartUnix: number;
+  sampleUnix: number;
+  windowStart: Date;
+  sample: Date;
+  tail: Uint8Array;
+  /** Raw payload including header. */
+  payload: Uint8Array;
+}
+
+export function tryDecodeHealthPush(parsed: ParsedRingPacket): RingHealthPush | null {
+  if (!parsed.ok) return null;
+  if (parsed.cmd !== R1_CMD.heartRate) return null;  // 0x01
+  const p = parsed.payload;
+  if (p.length < 13) return null;
+  if (p[3] !== 0x10 || p[4] !== 0xff) return null;   // fixed marker check
+
+  const windowStartUnix = readU32LE(p, 5);
+  const sampleUnix = readU32LE(p, 9);
+  const sub = parsed.sub;
+  const subName: RingHealthPush["subName"] =
+    sub === 0x24 ? "heartRate" :
+    sub === 0x20 ? "activity" :
+    sub === 0x28 ? "multi" : "other";
+
+  return {
+    kind: "ring-health",
+    cmd: parsed.cmd,
+    sub: parsed.sub,
+    subName,
+    flagByte: p[2]!,
+    windowStartUnix,
+    sampleUnix,
+    windowStart: new Date(windowStartUnix * 1000),
+    sample: new Date(sampleUnix * 1000),
+    tail: p.subarray(13),
+    payload: p,
+  };
+}
+
+/**
+ * Best-effort parser for the heart-rate tail (sub=0x24). Tail has groups
+ * of four bytes each: [interval_minutes, bpm, bpm, bpm]. Three samples per
+ * interval group in observed captures, though group count varies.
+ */
+export function decodeHeartRateTail(tail: Uint8Array): { intervalMin: number; bpm: number[] }[] {
+  const out: { intervalMin: number; bpm: number[] }[] = [];
+  let i = 0;
+  while (i + 3 < tail.length) {
+    out.push({
+      intervalMin: tail[i]!,
+      bpm: [tail[i + 1]!, tail[i + 2]!, tail[i + 3]!],
+    });
+    i += 4;
+  }
+  return out;
+}
+
+/**
+ * Best-effort parser for the activity tail (sub=0x20). Tail has a u8
+ * sentinel/count followed by u16 LE sample values (steps-per-minute
+ * typically).
+ */
+export function decodeActivityTail(tail: Uint8Array): number[] {
+  const out: number[] = [];
+  // Skip the first byte if it looks like a sentinel < 255, then read u16 LE pairs.
+  let i = 0;
+  while (i + 1 < tail.length) {
+    out.push(tail[i]! | (tail[i + 1]! << 8));
+    i += 2;
+  }
+  return out;
+}
+
+function readU32LE(b: Uint8Array, off: number): number {
+  return (b[off]! | (b[off + 1]! << 8) | (b[off + 2]! << 16) | (b[off + 3]! << 24)) >>> 0;
+}
+
+// ---------- Firmware / serial parsers ----------
+
+/** Parse the `cmd=0x02 sub=0x2c` firmware-version response. */
+export function decodeFirmware(parsed: ParsedRingPacket): { hw: string; sw: string } | null {
+  if (!parsed.ok || parsed.cmd !== 0x02 || parsed.sub !== 0x2c) return null;
+  const p = parsed.payload;
+  if (p.length < 34) return null;
+  const decode = (buf: Uint8Array) =>
+    Buffer.from(buf).toString("utf8").replace(/\0+$/g, "").replace(/[\x00-\x1f]+/g, "");
+  return {
+    hw: decode(p.subarray(2, 18)),
+    sw: decode(p.subarray(18, 34)),
+  };
+}
+
+/** Parse the `cmd=0x11 sub=0x85` serial-number push. */
+export function decodeSerial(parsed: ParsedRingPacket): { serial: string } | null {
+  if (!parsed.ok || parsed.cmd !== 0x11 || parsed.sub !== 0x85) return null;
+  const ascii = Buffer.from(parsed.payload).toString("utf8");
+  const m = ascii.match(/[A-Z0-9]{15,}/);
+  return m ? { serial: m[0] } : null;
+}
