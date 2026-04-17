@@ -23,6 +23,7 @@ If any of these three fail, fix that before trying anything else.
 | File | What it does |
 |---|---|
 | **`hello-text.ts`** | Text container with a live countdown. Exercises CREATE + heartbeat + repeated UPDATE. |
+| **`droidbridge-hello-text.ts`** | Same hello-text flow, but over a DroidBridge HTTP/WS session instead of local Noble BLE. |
 | **`list-taps.ts`** | Interactive menu. CREATE + REBUILD a list, subscribe to tap events, react. |
 | **`pager.ts`** | Long list paginated through `g2-kit/ui`'s pager, with ▲ Prev / ▼ Next nav rows. |
 | **`image.ts`** | Procedurally-generated images pushed through `G2ImageStreamer`. Exercises the full image pipeline — first-stream warmup, sliding-window Cmd=3, dedup. |
@@ -84,5 +85,12 @@ All examples use this exact pattern.
 **`CREATE did not ack`** — another session is still live, OR you re-ran the example with the same container name but didn't reconnect. Kill any stale node processes, wait 5 s, retry. Subsequent CREATEs of the same name in the same session are silent by design (see `ble/docs/containers.md`).
 
 **Warning about `MaxListenersExceededWarning`** — noble leaks `data` listeners. The library bumps the cap internally in `connectArm`; if you see this warning you're using the raw noble API somewhere bypassing the wrapper.
+
+**DroidBridge session won't connect** — check:
+- `DROIDBRIDGE_URL` points at the phone's `http://...:8765`
+- `DROIDBRIDGE_TOKEN` matches the token configured in the Android app
+- The phone app is running and reachable over your Tailscale/LAN path
+- The official Even app is not actively connected to the glasses
+- If scanning is flaky, set `DROIDBRIDGE_LEFT_ADDRESS` / `DROIDBRIDGE_RIGHT_ADDRESS` to known arm MACs or let the session auto-pick them from `/bonded`
 
 See [`../ble/docs/gotchas.md`](../ble/docs/gotchas.md) for the full foot-gun list.
