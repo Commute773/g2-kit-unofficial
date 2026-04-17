@@ -10,6 +10,7 @@ export * from "./messages";
 export * from "./events";
 export * from "./ble";
 export * from "./session";
+export * from "./droidbridge-session";
 export * from "./settings";
 export * from "./audio";
 export * from "./lc3-decoder";
