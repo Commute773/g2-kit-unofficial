@@ -64,6 +64,20 @@ await session.close();
 
 The `sendPbPipelined` variant registers the ack waiter but does NOT await it — used by the image streamer to run a sliding-window Cmd=3 pipeline. See [`ui/image-streamer.ts`](../ui/image-streamer.ts).
 
+## Debug logging
+
+Set `G2_BLE_DEBUG` to trace frames without adding instrumentation at
+call sites:
+
+```bash
+G2_BLE_DEBUG=1   bun your-app.ts   # tx + rx + ack hits/misses/timeouts
+G2_BLE_DEBUG=tx  bun your-app.ts   # only outgoing frames
+G2_BLE_DEBUG=rx  bun your-app.ts   # only incoming frames
+G2_BLE_DEBUG=ack bun your-app.ts   # only waiter events
+```
+
+Each line: `sid=0xXX flag=0xXX tseq=0xXX frag=N/M Cmd=X msg=Y pb=<hex>`. Useful when a `sendPb` call silently returns null — you'll see whether the firmware responded and why the waiter missed.
+
 ## Magic counter
 
 Every ack-able write carries a `magic` value that the glasses echo back. The firmware treats `magic` as **effectively uint8** on some code paths, so keep it in the range 100..255 and cycle:
