@@ -18,6 +18,7 @@ import {
   G2SettingPackageSchema,
   g2_settingCommandId,
 } from "./gen/g2_setting_pb";
+import { parseCFWCapabilities, type CFWCapabilities } from "./capabilities";
 
 export const SID_UI_SETTING = 0x09;
 
@@ -101,6 +102,26 @@ export async function querySettings(
   const ack = await session.sendPb(SID_UI_SETTING, pb, magic, { ackTimeoutMs: 4000 });
   if (!ack) return null;
   return decodeSettingsSnapshot(ack.pb) ?? emptySnapshot();
+}
+
+// Detect our custom firmware via the capability field it appends to the
+// settings READ response. Returns null on stock firmware (field absent) or on
+// ack timeout. See `capabilities.ts` for the wire format and feature tokens.
+export async function queryCapabilities(
+  session: G2SessionLike,
+  magic: number,
+): Promise<CFWCapabilities | null> {
+  const req = create(G2SettingPackageSchema, {
+    commandId: g2_settingCommandId.DeviceReceiveRequest,
+    magicRandom: magic,
+    deviceReceiveRequestFromApp: {
+      settingInfoType: APPRequestSettingType.APP_REQUIRE_BASIC_SETTING,
+    },
+  });
+  const pb = toBinary(G2SettingPackageSchema, req);
+  const ack = await session.sendPb(SID_UI_SETTING, pb, magic, { ackTimeoutMs: 4000 });
+  if (!ack) return null;
+  return parseCFWCapabilities(ack.pb);
 }
 
 // Every leaf mutation goes through `sendDeviceReceive` with one field

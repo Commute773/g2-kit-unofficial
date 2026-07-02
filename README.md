@@ -63,6 +63,7 @@ See [`examples/`](./examples) for runnable versions of the above plus:
 - **`find-glasses.ts`** — scan specifically for G2 arms and print RSSI/UUID
 - **`connect.ts`** — minimal session open → read battery → close
 - **`hello-text.ts`** — text container with a live timer
+- **`droidbridge-hello-text.ts`** — same hello-text demo over a DroidBridge HTTP/WS relay
 - **`list-taps.ts`** — interactive list with tap handling
 - **`image.ts`** — push a 1-bit bitmap to the lens
 - **`mic-stream.ts`** — stream LC3 mic audio and decode to PCM
@@ -88,6 +89,8 @@ The glasses-facing side of the [cmux](https://github.com/Commute773/cmux) tmux f
 Desktop BLE stacks (Noble on macOS/Linux, WinRT, BlueZ) are fragile — pairings get lost on sleep, scans stall, MTU negotiation drifts. If you already have an Android phone lying around, you can use [DroidBridge](https://github.com/Commute773/droidbridge) as a more resilient transport: install the APK, tap **Start Server**, and the phone exposes its BLE stack as a local HTTP + WebSocket service that any `G2SessionLike` implementation can target.
 
 A working DroidBridge-backed session lives in [`cmux/glasses/droidbridge-session.ts`](https://github.com/Commute773/cmux/blob/main/glasses/droidbridge-session.ts) — it implements the same `G2SessionLike` interface as the stock Noble `G2Session`, so swapping transports is a one-line change in the consumer. See the DroidBridge README for the REST/WS API.
+
+This repo also includes a minimal in-tree `DroidBridgeSession` plus `examples/droidbridge-hello-text.ts` for basic bridge-based rendering smoke tests.
 
 ## Status
 
